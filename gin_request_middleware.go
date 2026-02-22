@@ -13,6 +13,7 @@ func ValidatePath[T any](next func(*gin.Context, T)) gin.HandlerFunc {
 		var query T
 
 		_ = c.ShouldBindJSON(&query)
+		_ = c.ShouldBindQuery(&query)
 
 		v := reflect.ValueOf(&query).Elem()
 		t := v.Type()

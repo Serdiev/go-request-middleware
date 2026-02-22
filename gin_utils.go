@@ -8,7 +8,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func ValidatePath[T any, T1 any](next func(*gin.Context, T, *T1), svc *T1) gin.HandlerFunc {
+func ValidatePath[T any](next func(*gin.Context, T)) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var query T
 
@@ -28,7 +28,7 @@ func ValidatePath[T any, T1 any](next func(*gin.Context, T, *T1), svc *T1) gin.H
 			}
 		}
 
-		next(c, query, svc)
+		next(c, query)
 	}
 }
 
@@ -43,36 +43,16 @@ func findFieldByName(t reflect.Type, name string) *reflect.StructField {
 	return nil
 }
 
-func BindRequest[T any, T1 any](next func(*gin.Context, T, *T1), svc *T1) gin.HandlerFunc {
+func ValidateRequest[T any](next func(*gin.Context, T)) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		var request T
+		var query T
 
-		v := reflect.ValueOf(&request).Elem()
-		t := v.Type()
-
-		var dataField reflect.Value
-		for i := 0; i < t.NumField(); i++ {
-			field := t.Field(i)
-			if field.Name == "Data" && field.Type.Kind() == reflect.Map {
-				dataField = v.Field(i)
-				break
-			}
+		if err := c.ShouldBindJSON(&query); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
 		}
 
-		if dataField.IsValid() {
-			var data map[string]any
-			if err := c.ShouldBindJSON(&data); err != nil {
-				c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-				return
-			}
-			dataField.Set(reflect.ValueOf(data))
-		} else {
-			if err := c.ShouldBindJSON(&request); err != nil {
-				c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-				return
-			}
-		}
-
+		v := reflect.ValueOf(&query).Elem()
 		if field := v.FieldByName("Id"); field.IsValid() && field.CanSet() {
 			if id := c.Param("id"); id != "" {
 				if field.Kind() == reflect.String {
@@ -81,6 +61,28 @@ func BindRequest[T any, T1 any](next func(*gin.Context, T, *T1), svc *T1) gin.Ha
 			}
 		}
 
-		next(c, request, svc)
+		next(c, query)
+	}
+}
+
+func ValidateQuery[T any](next func(*gin.Context, T)) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		var query T
+
+		if err := c.ShouldBindQuery(&query); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+
+		v := reflect.ValueOf(&query).Elem()
+		if field := v.FieldByName("Id"); field.IsValid() && field.CanSet() {
+			if id := c.Param("id"); id != "" {
+				if field.Kind() == reflect.String {
+					field.SetString(id)
+				}
+			}
+		}
+
+		next(c, query)
 	}
 }
